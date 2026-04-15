@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> 💼 工作時數  </title>
+    <style>
+        :root {
+            --bg-color: #f0f8ff; 
+            --accent-color: #89cff0; 
+            --warning-color: #ffcccb;
+            --border-style: 2.5px solid #000;
+        }
+
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        .container {
+            background: #fff;
+            width: 100%;
+            max-width: 450px;
+            padding: 20px;
+            border: var(--border-style);
+            box-shadow: 8px 8px 0px #000;
+            border-radius: 15px;
+        }
+
+        .input-group { margin-bottom: 12px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            box-sizing: border-box;
+            border: var(--border-style);
+            border-radius: 10px;
+            font-size: 16px;
+            background: #fff;
+            outline: none;
+        }
+
+        .stats-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .stat-box {
+            background: var(--accent-color);
+            border: var(--border-style);
+            padding: 12px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .stat-box.highlight {
+            background: var(--warning-color);
+        }
+
+        .btn-main {
+            width: 100%;
+            padding: 15px;
+            background-color: #fff;
+            border: var(--border-style);
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 4px 4px 0px #000;
+            margin-bottom: 20px;
+        }
+
+        .btn-main:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0px #000; }
+
+        .filter-section {
+            background: #f9f9f9;
+            padding: 15px;
+            border: var(--border-style);
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .log-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1.5px solid #000;
+            margin-bottom: 8px;
+            padding: 10px;
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .date-label { font-size: 11px; color: #666; }
+        .hour-label { font-weight: bold; }
+
+        .actions button {
+            margin-left: 5px;
+            padding: 5px 8px;
+            border: 1px solid #000;
+            border-radius: 5px;
+            font-size: 12px;
+            background: #fff;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2 style="margin:0 0 15px 0; text-align:center;">📅 工作時數管理 📅</h2>
+    
+    <div class="input-group">
+        <label>💪🏻 本月目標時數 (hr)</label>
+        <input type="number" id="goalInput" value="45" onchange="renderAll()">
+    </div>
+
+    <div class="input-group">
+        <label>✨ 今日時數 ✨</label>
+        <input type="number" id="dailyInput" step="0.5" placeholder="輸入時數">
+    </div>
+
+    <button class="btn-main" onclick="addRecord()">💾 儲存時數</button>
+
+    <div class="filter-section">
+        <label>🔍 選擇回顧月份</label>
+        <select id="monthFilter" onchange="renderAll()"></select>
+        
+        <div class="stats-container">
+            <div class="stat-box highlight">
+                <span id="displayMonthRem">本月</span> 剩餘<br>
+                <span id="viewGap" style="font-size: 20px;">0</span> hr
+            </div>
+            <div class="stat-box">
+                <span id="displayMonthTotal">本月</span> 累計<br>
+                <span id="viewTotal" style="font-size: 20px;">0</span> hr
+            </div>
+        </div>
+    </div>
+
+    <label>📋 該月明細</label>
+    <div id="logList"></div>
+</div>
+
+<script>
+    let records = JSON.parse(localStorage.getItem('workRecords')) || [];
+
+    initMonthFilter();
+    renderAll();
+
+    function initMonthFilter() {
+        const select = document.getElementById('monthFilter');
+        const now = new Date();
+        for (let i = 0; i < 6; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const val = `${d.getFullYear()}-${d.getMonth() + 1}`;
+            const text = `${d.getFullYear()}年 ${d.getMonth() + 1}月`;
+            const opt = new Option(text, val);
+            select.add(opt);
+        }
+    }
+
+    function addRecord() {
+        const val = parseFloat(document.getElementById('dailyInput').value);
+        if (!val || val <= 0) return;
+
+        const now = new Date();
+        const newRecord = {
+            id: Date.now(),
+            year: now.getFullYear(),
+            month: now.getMonth() + 1,
+            key: `${now.getFullYear()}-${now.getMonth() + 1}`,
+            fullDate: `${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`,
+            hours: val
+        };
+
+        records.unshift(newRecord);
+        localStorage.setItem('workRecords', JSON.stringify(records));
+        renderAll();
+        document.getElementById('dailyInput').value = "";
+    }
+
+    function editRecord(id) {
+        const record = records.find(r => r.id === id);
+        const newHours = prompt("修改時數：", record.hours);
+        if (newHours !== null && !isNaN(newHours) && newHours > 0) {
+            record.hours = parseFloat(newHours);
+            localStorage.setItem('workRecords', JSON.stringify(records));
+            renderAll();
+        }
+    }
+
+    function deleteRecord(id) {
+        if (confirm("確定刪除這筆紀錄嗎？")) {
+            records = records.filter(r => r.id !== id);
+            localStorage.setItem('workRecords', JSON.stringify(records));
+            renderAll();
+        }
+    }
+
+    function renderAll() {
+        const selectedKey = document.getElementById('monthFilter').value;
+        const goal = parseFloat(document.getElementById('goalInput').value) || 0;
+        localStorage.setItem('workGoal', goal);
+
+        const logListEl = document.getElementById('logList');
+        logListEl.innerHTML = "";
+
+        let viewTotal = 0;
+        const monthName = document.getElementById('monthFilter').options[document.getElementById('monthFilter').selectedIndex].text;
+        document.getElementById('displayMonthRem').innerText = monthName;
+        document.getElementById('displayMonthTotal').innerText = monthName;
+
+        records.forEach(r => {
+            if (r.key === selectedKey) {
+                viewTotal += r.hours;
+                const item = document.createElement('div');
+                item.className = 'log-item';
+                item.innerHTML = `
+                    <div>
+                        <span class="date-label">${r.fullDate}</span><br>
+                        <span class="hour-label">${r.hours} hr</span>
+                    </div>
+                    <div class="actions">
+                        <button onclick="editRecord(${r.id})">編輯</button>
+                        <button onclick="deleteRecord(${r.id})" style="color:red">刪除</button>
+                    </div>
+                `;
+                logListEl.appendChild(item);
+            }
+        });
+
+        const gap = goal - viewTotal;
+        document.getElementById('viewTotal').innerText = viewTotal;
+        document.getElementById('viewGap').innerText = gap > 0 ? gap.toFixed(1) : 0;
+    }
+
+    if(localStorage.getItem('workGoal')) {
+        document.getElementById('goalInput').value = localStorage.getItem('workGoal');
+        renderAll();
+    }
+</script>
+
+</body>
+</html>
