@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title> 💼 工作時數  </title>
-    <link rel="apple-touch-icon" href="icon.png">
-    <link rel="icon" href="icon.png" type="image/jpeg">
+    <title>💼 工作時數</title>
+    
+    <link rel="apple-touch-icon" href="icon.jpg">
+    <link rel="icon" href="icon.jpg" type="image/jpeg">
+
     <style>
         :root {
             --bg-color: #f0f8ff; 
@@ -31,9 +33,19 @@
             border: var(--border-style);
             box-shadow: 8px 8px 0px #000;
             border-radius: 15px;
+            text-align: center;
         }
 
-        .input-group { margin-bottom: 12px; }
+        .app-logo {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: var(--border-style);
+            margin-bottom: 15px;
+            object-fit: cover;
+        }
+
+        .input-group { margin-bottom: 12px; text-align: left; }
         label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; }
 
         input, select {
@@ -45,6 +57,15 @@
             font-size: 16px;
             background: #fff;
             outline: none;
+        }
+
+        /* 讓小時和分鐘並排的容器 */
+        .time-input-container {
+            display: flex;
+            gap: 10px;
+        }
+        .time-input-wrapper {
+            flex: 1;
         }
 
         .stats-container {
@@ -87,6 +108,7 @@
             border: var(--border-style);
             border-radius: 10px;
             margin-bottom: 20px;
+            text-align: left;
         }
 
         .log-item {
@@ -116,16 +138,25 @@
 <body>
 
 <div class="container">
-    <h2 style="margin:0 0 15px 0; text-align:center;">📅 工作時數管理 📅</h2>
+    <img src="icon.jpg" class="app-logo" alt="Logo">
+    
+    <h2 style="margin:0 0 15px 0;">📅 工作時數管理 📅</h2>
     
     <div class="input-group">
         <label>💪🏻 本月目標時數 (hr)</label>
-        <input type="number" id="goalInput" value="45" onchange="renderAll()">
+        <input type="number" id="goalInput" value="160" onchange="renderAll()">
     </div>
 
     <div class="input-group">
         <label>✨ 今日時數 ✨</label>
-        <input type="number" id="dailyInput" step="0.5" placeholder="輸入時數">
+        <div class="time-input-container">
+            <div class="time-input-wrapper">
+                <input type="number" id="dailyHour" placeholder="小時" min="0">
+            </div>
+            <div class="time-input-wrapper">
+                <input type="number" id="dailyMin" placeholder="分鐘" min="0" max="59">
+            </div>
+        </div>
     </div>
 
     <button class="btn-main" onclick="addRecord()">💾 儲存時數</button>
@@ -146,8 +177,10 @@
         </div>
     </div>
 
-    <label>📋 該月明細</label>
-    <div id="logList"></div>
+    <div style="text-align: left;">
+        <label>📋 該月明細</label>
+        <div id="logList"></div>
+    </div>
 </div>
 
 <script>
@@ -169,8 +202,13 @@
     }
 
     function addRecord() {
-        const val = parseFloat(document.getElementById('dailyInput').value);
-        if (!val || val <= 0) return;
+        const h = parseFloat(document.getElementById('dailyHour').value) || 0;
+        const m = parseFloat(document.getElementById('dailyMin').value) || 0;
+        
+        // 將分鐘換算成小時 (例如 30分 = 0.5小時)
+        const totalInputHours = h + (m / 60);
+
+        if (totalInputHours <= 0) return;
 
         const now = new Date();
         const newRecord = {
@@ -179,20 +217,28 @@
             month: now.getMonth() + 1,
             key: `${now.getFullYear()}-${now.getMonth() + 1}`,
             fullDate: `${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}`,
-            hours: val
+            hours: totalInputHours // 統一存儲為小時單位
         };
 
         records.unshift(newRecord);
         localStorage.setItem('workRecords', JSON.stringify(records));
         renderAll();
-        document.getElementById('dailyInput').value = "";
+        
+        // 清空輸入框
+        document.getElementById('dailyHour').value = "";
+        document.getElementById('dailyMin').value = "";
     }
 
     function editRecord(id) {
         const record = records.find(r => r.id === id);
-        const newHours = prompt("修改時數：", record.hours);
-        if (newHours !== null && !isNaN(newHours) && newHours > 0) {
-            record.hours = parseFloat(newHours);
+        // 編輯時也方便輸入，將存儲的小時轉回時分顯示給用戶看
+        const currentH = Math.floor(record.hours);
+        const currentM = Math.round((record.hours - currentH) * 60);
+
+        const newVal = prompt(`目前紀錄：${currentH}時 ${currentM}分\n請輸入新的總小時數(可帶小數)：`, record.hours);
+        
+        if (newVal !== null && !isNaN(newVal) && newVal > 0) {
+            record.hours = parseFloat(newVal);
             localStorage.setItem('workRecords', JSON.stringify(records));
             renderAll();
         }
@@ -204,6 +250,15 @@
             localStorage.setItem('workRecords', JSON.stringify(records));
             renderAll();
         }
+    }
+
+    // 格式化顯示：將小時轉回「幾小時幾分」的字串
+    function formatHourToText(hrs) {
+        const h = Math.floor(hrs);
+        const m = Math.round((hrs - h) * 60);
+        if (m === 0) return `${h} 小時`;
+        if (h === 0) return `${m} 分鐘`;
+        return `${h} 時 ${m} 分`;
     }
 
     function renderAll() {
@@ -225,9 +280,9 @@
                 const item = document.createElement('div');
                 item.className = 'log-item';
                 item.innerHTML = `
-                    <div>
+                    <div style="text-align: left;">
                         <span class="date-label">${r.fullDate}</span><br>
-                        <span class="hour-label">${r.hours} hr</span>
+                        <span class="hour-label">${formatHourToText(r.hours)}</span>
                     </div>
                     <div class="actions">
                         <button onclick="editRecord(${r.id})">編輯</button>
@@ -239,7 +294,7 @@
         });
 
         const gap = goal - viewTotal;
-        document.getElementById('viewTotal').innerText = viewTotal;
+        document.getElementById('viewTotal').innerText = viewTotal.toFixed(1);
         document.getElementById('viewGap').innerText = gap > 0 ? gap.toFixed(1) : 0;
     }
 
