@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght=500&display=swap" rel="stylesheet">
 
     <style>
         :root {
@@ -76,6 +76,13 @@
         .btn-main:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0px #4a148c; }
         .btn-main:disabled { opacity: 0.6; cursor: not-allowed; }
 
+        /* 結算按鈕特別樣式 */
+        .btn-settle {
+            background-color: #f3e5f5;
+            margin-top: 5px;
+            margin-bottom: 15px;
+        }
+
         .calendar-grid {
             display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; background: #fff;
             padding: 10px; border: var(--border-style); border-radius: 15px; margin-top: 10px;
@@ -124,6 +131,8 @@
             </div>
         </div>
 
+        <button class="btn-main btn-settle" onclick="settleAll()">🎯 本週期結算 SETTLE</button>
+
         <div class="input-group">
             <label>🔍 歷史回顧</label>
             <div style="display: flex; gap: 8px;">
@@ -155,9 +164,8 @@
         }
         mSelect.value = now.getMonth() + 1;
 
-        document.getElementById('goalInput').value = localStorage.getItem('workGoal') || "38";
+        document.getElementById('goalInput').value = localStorage.getItem('workGoal') || "50";
 
-        // 初始載入雲端資料
         updateStatus("☁️ 正在同步雲端資料...");
         await loadFromCloud();
         renderAll();
@@ -188,7 +196,7 @@
         try {
             await fetch(scriptURL, {
                 method: "POST",
-                mode: 'no-cors', // GAS 跨網域必要設定
+                mode: 'no-cors',
                 body: JSON.stringify({ action: "saveAll", data: records })
             });
             updateStatus("✅ 資料已成功備份至雲端");
@@ -215,6 +223,15 @@
         await saveToCloud();
     }
 
+    // 補上這個：處理結算點按的函式
+    function settleAll() {
+        if (confirm("確定要結算目前的時數嗎？結算後「目前累計」將歸零並重新計算。歷史紀錄仍會保留在日曆與雲端中。")) {
+            lastSettleTime = Date.now();
+            localStorage.setItem('lastSettleTime', lastSettleTime);
+            renderAll();
+        }
+    }
+
     function renderAll() {
         const goal = parseFloat(document.getElementById('goalInput').value) || 0;
         const year = parseInt(document.getElementById('yearSelect').value);
@@ -223,6 +240,7 @@
         grid.innerHTML = "";
 
         let currentTotal = 0;
+        // 這裡會過濾掉結算時間點之前的紀錄，只加總新紀錄
         records.forEach(r => { if (r.id > lastSettleTime) currentTotal += r.hours; });
         document.getElementById('sessionTotal').innerText = currentTotal.toFixed(1);
         document.getElementById('sessionGap').innerText = Math.max(0, goal - currentTotal).toFixed(1);
