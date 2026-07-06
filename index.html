@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+    <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -223,8 +223,8 @@
 
         let currentTotal = 0;
         records.forEach(r => { if (r.id > lastSettleTime) currentTotal += r.hours; });
-        document.getElementById('sessionTotal').innerText = currentTotal.toFixed(1);
-        document.getElementById('sessionGap').innerText = Math.max(0, goal - currentTotal).toFixed(1);
+        document.getElementById('sessionTotal').innerText = currentTotal.toFixed(2);
+        document.getElementById('sessionGap').innerText = Math.max(0, goal - currentTotal).toFixed(2);
 
         ['日', '一', '二', '三', '四', '五', '六'].forEach(w => {
             const h = document.createElement('div'); h.className = 'calendar-day-head'; h.innerText = w; grid.appendChild(h);
@@ -241,7 +241,7 @@
             if (dayRecords.length > 0) {
                 cell.classList.add('has-data');
                 const sum = dayRecords.reduce((s, r) => s + r.hours, 0);
-                cell.innerHTML = `<span>${i}</span><div class="work-label">${sum.toFixed(1)}h</div>`;
+                cell.innerHTML = `<span>${i}</span><div class="work-label">${sum.toFixed(2)}h</div>`;
             } else { 
                 cell.innerHTML = `<span>${i}</span>`; 
             }
@@ -251,7 +251,7 @@
     }
 
     async function handleDateEdit(y, m, d, dayRecords) {
-        const currentVal = dayRecords.reduce((s, r) => s + r.hours, 0).toFixed(1);
+        const currentVal = dayRecords.reduce((s, r) => s + r.hours, 0).toFixed(2);
         const newVal = prompt(`修改 [ ${m}/${d} ] 時數：\n(輸入 0 刪除)`, currentVal);
         if (newVal !== null && !isNaN(newVal)) {
             records = records.filter(r => !(r.year === y && r.month === m && r.day === d));
