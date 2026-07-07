@@ -146,7 +146,7 @@
         mSelect.value = now.getMonth() + 1;
 
         // 這裡已經幫妳把初始預設值改成 50 囉！
-        document.getElementById('goalInput').value = localStorage.getItem('workGoal') || "50";
+        document.getElementById('goalInput').value = localStorage.getItem('workGoal') || "60";
 
         updateStatus("☁️ 正在同步雲端資料...");
         await loadFromCloud();
