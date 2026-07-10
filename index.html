@@ -1,4 +1,4 @@
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -104,11 +104,11 @@
         <div class="stats-container">
             <div class="stat-box highlight">
                 <div style="font-size:12px">目前剩餘</div>
-                <div id="sessionGap" class="stat-value">0</div>
+                <div id="sessionGap" class="stat-value">0.00</div>
             </div>
             <div class="stat-box">
                 <div style="font-size:12px">目前累計</div>
-                <div id="sessionTotal" class="stat-value">0</div>
+                <div id="sessionTotal" class="stat-value">0.00</div>
             </div>
         </div>
 
@@ -145,8 +145,9 @@
         }
         mSelect.value = now.getMonth() + 1;
 
-        // 這裡已經幫妳把初始預設值改成 50 囉！
-        document.getElementById('goalInput').value = localStorage.getItem('workGoal') || "60";
+        // 強制初始目標時數為 60 
+        document.getElementById('goalInput').value = "60";
+        localStorage.setItem('workGoal', "60");
 
         updateStatus("☁️ 正在同步雲端資料...");
         await loadFromCloud();
@@ -162,7 +163,12 @@
             const response = await fetch(scriptURL + "?action=loadAll");
             const cloudData = await response.json();
             if (Array.isArray(cloudData)) {
-                records = cloudData;
+                // 從雲端載入時，Apps Script 的資料結構如果含有重複資料，會在這裡自動過濾不重複的 id
+                const uniqueMap = new Map();
+                cloudData.forEach(item => { if(item && item.id) uniqueMap.set(item.id, item); });
+                records = Array.from(uniqueMap.values());
+                records.sort((a, b) => b.id - a.id); // 降序排列
+
                 saveLocal();
                 updateStatus("✅ 雲端資料已同步");
             }
@@ -171,15 +177,17 @@
         }
     }
 
-    async function saveToCloud() {
+    // 【核心修正】上傳雲端時，改為只傳送「最新增加的那一筆筆資料」，而不傳送整張歷史包裹！
+    async function saveSingleToCloud(singleRecord) {
         const btn = document.getElementById('saveBtn');
         btn.disabled = true;
         updateStatus("⏳ 正在上傳雲端...");
         try {
+            // 注意：這裡只包裝 singleRecord 傳送，避免後端重複塞入整份清單
             await fetch(scriptURL, {
                 method: "POST",
                 mode: 'no-cors',
-                body: JSON.stringify({ action: "saveAll", data: records })
+                body: JSON.stringify({ action: "saveAll", data: [singleRecord] })
             });
             updateStatus("✅ 資料已成功備份至雲端");
         } catch (e) {
@@ -195,22 +203,27 @@
         if (total <= 0) return;
 
         const now = new Date();
-        records.unshift({ id: Date.now(), year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), hours: total });
+        const newRecord = { id: Date.now(), year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), hours: total };
         
+        records.unshift(newRecord);
         saveLocal();
         renderAll();
+        
         document.getElementById('dailyHour').value = "";
         document.getElementById('dailyMin').value = "";
         
-        await saveToCloud();
+        // 【核心修正】只同步上傳這一筆，後端就不會出現全體日期複製貼上的慘劇
+        await saveSingleToCloud(newRecord);
     }
 
+    // 【核心修正】結算只改變手機網頁內的累計時間，絕對不上傳資料給雲端！
     function settleAll() {
         if (confirm("確定要結算嗎？結算後將歸零並重新計算。歷史紀錄仍會保留在日曆中。")) {
             lastSettleTime = Date.now();
             localStorage.setItem('lastSettleTime', lastSettleTime);
             renderAll();
             updateStatus("✅ 結算成功！新週期開始");
+            // 這裡不呼叫任何上傳函式，避免觸發後端的寫入
         }
     }
 
@@ -255,10 +268,21 @@
         const newVal = prompt(`修改 [ ${m}/${d} ] 時數：\n(輸入 0 刪除)`, currentVal);
         if (newVal !== null && !isNaN(newVal)) {
             records = records.filter(r => !(r.year === y && r.month === m && r.day === d));
+            let editedRecord = null;
             if (parseFloat(newVal) > 0) {
-                records.unshift({ id: Date.now(), year: y, month: m, day: d, hours: parseFloat(newVal) });
+                editedRecord = { id: Date.now(), year: y, month: m, day: d, hours: parseFloat(newVal) };
+                records.unshift(editedRecord);
             }
-            saveLocal(); renderAll(); await saveToCloud();
+            saveLocal(); 
+            renderAll(); 
+            
+            // 修改時也只處理單筆
+            if(editedRecord) {
+                await saveSingleToCloud(editedRecord);
+            } else {
+                // 如果是刪除，因為沒動後端刪除邏輯，先在手機端做掉
+                updateStatus("✅ 本地已刪除，請手動清理試算表對應行數（若有需要）");
+            }
         }
     }
 
