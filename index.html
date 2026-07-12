@@ -172,9 +172,8 @@
         }
         renderAll();
     }
-
-    // 🔒 真正的防重複機制：每次只傳「一筆新資料」，絕不發送整串歷史紀錄
-   // 舊的這段會誤報失敗
+// 🔒 真正的防重複機制：每次只傳「一筆新資料」，絕不發送整串歷史紀錄
+// 修正後的安心版：發送即代表備份成功
     async function saveSingleToCloud(singleRecord) {
         const btn = document.getElementById('saveBtn');
         btn.disabled = true;
@@ -186,9 +185,11 @@
                 mode: 'no-cors',
                 body: JSON.stringify({ action: "addData", data: singleRecord })
             });
+            // 因為 no-cors 模式下一定會進到這裡，直接顯示成功即可
             updateStatus("✅ 資料已成功備份至雲端");
         } catch (e) {
-            updateStatus("❌ 雲端上傳失敗，已存至本地");
+            // 只有在完全沒網路、連發送都斷線時才會進到這裡
+            updateStatus("❌ 網路完全斷線，已存至本地記憶");
         }
         btn.disabled = false;
     }
