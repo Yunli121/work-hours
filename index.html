@@ -101,6 +101,7 @@
 
         <button id="saveBtn" class="btn-main" onclick="addRecord()">💾 儲存並同步 SAVE</button>
         
+        <!-- 已調整順序：將剩餘時數與累積時數欄位移動至結算功能前 -->
         <div class="stats-container">
             <div class="stat-box highlight">
                 <div style="font-size:12px">目前剩餘</div>
@@ -145,13 +146,11 @@
         }
         mSelect.value = now.getMonth() + 1;
 
-        // 強制初始目標時數為 60 
         document.getElementById('goalInput').value = "60";
         localStorage.setItem('workGoal', "60");
 
         updateStatus("☁️ 正在同步雲端資料...");
         await loadFromCloud();
-        renderAll();
     }
 
     function updateStatus(msg) {
@@ -163,31 +162,27 @@
             const response = await fetch(scriptURL + "?action=loadAll");
             const cloudData = await response.json();
             if (Array.isArray(cloudData)) {
-                // 從雲端載入時，Apps Script 的資料結構如果含有重複資料，會在這裡自動過濾不重複的 id
                 const uniqueMap = new Map();
                 cloudData.forEach(item => { if(item && item.id) uniqueMap.set(item.id, item); });
                 records = Array.from(uniqueMap.values());
-                records.sort((a, b) => b.id - a.id); // 降序排列
-
                 saveLocal();
                 updateStatus("✅ 雲端資料已同步");
             }
         } catch (e) {
             updateStatus("⚠️ 載入失敗，目前使用離線資料");
         }
+        renderAll();
     }
 
-    // 【核心修正】上傳雲端時，改為只傳送「最新增加的那一筆筆資料」，而不傳送整張歷史包裹！
     async function saveSingleToCloud(singleRecord) {
         const btn = document.getElementById('saveBtn');
         btn.disabled = true;
         updateStatus("⏳ 正在上傳雲端...");
         try {
-            // 注意：這裡只包裝 singleRecord 傳送，避免後端重複塞入整份清單
             await fetch(scriptURL, {
                 method: "POST",
                 mode: 'no-cors',
-                body: JSON.stringify({ action: "saveAll", data: [singleRecord] })
+                body: JSON.stringify({ action: "saveAll", data: records })
             });
             updateStatus("✅ 資料已成功備份至雲端");
         } catch (e) {
@@ -203,7 +198,14 @@
         if (total <= 0) return;
 
         const now = new Date();
-        const newRecord = { id: Date.now(), year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), hours: total };
+        // 確保儲存時 year, month, day 抓取正確
+        const newRecord = { 
+            id: Date.now(), 
+            year: now.getFullYear(), 
+            month: now.getMonth() + 1, 
+            day: now.getDate(), 
+            hours: total 
+        };
         
         records.unshift(newRecord);
         saveLocal();
@@ -212,18 +214,15 @@
         document.getElementById('dailyHour').value = "";
         document.getElementById('dailyMin').value = "";
         
-        // 【核心修正】只同步上傳這一筆，後端就不會出現全體日期複製貼上的慘劇
         await saveSingleToCloud(newRecord);
     }
 
-    // 【核心修正】結算只改變手機網頁內的累計時間，絕對不上傳資料給雲端！
     function settleAll() {
         if (confirm("確定要結算嗎？結算後將歸零並重新計算。歷史紀錄仍會保留在日曆中。")) {
             lastSettleTime = Date.now();
             localStorage.setItem('lastSettleTime', lastSettleTime);
             renderAll();
             updateStatus("✅ 結算成功！新週期開始");
-            // 這裡不呼叫任何上傳函式，避免觸發後端的寫入
         }
     }
 
@@ -235,7 +234,7 @@
         grid.innerHTML = "";
 
         let currentTotal = 0;
-        records.forEach(r => { if (r.id > lastSettleTime) currentTotal += r.hours; });
+        records.forEach(r => { if (Number(r.id) > lastSettleTime) currentTotal += Number(r.hours); });
         document.getElementById('sessionTotal').innerText = currentTotal.toFixed(2);
         document.getElementById('sessionGap').innerText = Math.max(0, goal - currentTotal).toFixed(2);
 
@@ -249,11 +248,13 @@
 
         for (let i = 1; i <= daysInMonth; i++) {
             const cell = document.createElement('div'); cell.className = 'calendar-cell';
-            const dayRecords = records.filter(r => r.year === year && r.month === month && r.day === i);
+            
+            // 強化比對邏輯，確保數字比對不受字串影響
+            const dayRecords = records.filter(r => Number(r.year) === year && Number(r.month) === month && Number(r.day) === i);
             
             if (dayRecords.length > 0) {
                 cell.classList.add('has-data');
-                const sum = dayRecords.reduce((s, r) => s + r.hours, 0);
+                const sum = dayRecords.reduce((s, r) => s + Number(r.hours), 0);
                 cell.innerHTML = `<span>${i}</span><div class="work-label">${sum.toFixed(2)}h</div>`;
             } else { 
                 cell.innerHTML = `<span>${i}</span>`; 
@@ -264,10 +265,10 @@
     }
 
     async function handleDateEdit(y, m, d, dayRecords) {
-        const currentVal = dayRecords.reduce((s, r) => s + r.hours, 0).toFixed(2);
+        const currentVal = dayRecords.reduce((s, r) => s + Number(r.hours), 0).toFixed(2);
         const newVal = prompt(`修改 [ ${m}/${d} ] 時數：\n(輸入 0 刪除)`, currentVal);
         if (newVal !== null && !isNaN(newVal)) {
-            records = records.filter(r => !(r.year === y && r.month === m && r.day === d));
+            records = records.filter(r => !(Number(r.year) === y && Number(r.month) === m && Number(r.day) === d));
             let editedRecord = null;
             if (parseFloat(newVal) > 0) {
                 editedRecord = { id: Date.now(), year: y, month: m, day: d, hours: parseFloat(newVal) };
@@ -275,14 +276,7 @@
             }
             saveLocal(); 
             renderAll(); 
-            
-            // 修改時也只處理單筆
-            if(editedRecord) {
-                await saveSingleToCloud(editedRecord);
-            } else {
-                // 如果是刪除，因為沒動後端刪除邏輯，先在手機端做掉
-                updateStatus("✅ 本地已刪除，請手動清理試算表對應行數（若有需要）");
-            }
+            await saveSingleToCloud();
         }
     }
 
