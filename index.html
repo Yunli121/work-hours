@@ -101,7 +101,6 @@
 
         <button id="saveBtn" class="btn-main" onclick="addRecord()">💾 儲存並同步 SAVE</button>
         
-        <!-- 已調整順序：將剩餘時數與累積時數欄位移動至結算功能前 -->
         <div class="stats-container">
             <div class="stat-box highlight">
                 <div style="font-size:12px">目前剩餘</div>
@@ -174,15 +173,17 @@
         renderAll();
     }
 
+    // 🔒 真正的防重複機制：每次只傳「一筆新資料」，絕不發送整串歷史紀錄
     async function saveSingleToCloud(singleRecord) {
         const btn = document.getElementById('saveBtn');
         btn.disabled = true;
-        updateStatus("⏳ 正在上傳雲端...");
+        updateStatus("⏳ 正在上傳單筆資料...");
         try {
+            // 修正：動作改成 addData，且 body 只包單一物件，不包整個 records 陣列
             await fetch(scriptURL, {
                 method: "POST",
                 mode: 'no-cors',
-                body: JSON.stringify({ action: "saveAll", data: records })
+                body: JSON.stringify({ action: "addData", data: singleRecord })
             });
             updateStatus("✅ 資料已成功備份至雲端");
         } catch (e) {
@@ -198,7 +199,6 @@
         if (total <= 0) return;
 
         const now = new Date();
-        // 確保儲存時 year, month, day 抓取正確
         const newRecord = { 
             id: Date.now(), 
             year: now.getFullYear(), 
@@ -214,6 +214,7 @@
         document.getElementById('dailyHour').value = "";
         document.getElementById('dailyMin').value = "";
         
+        // 傳送且僅傳送當前這筆 newRecord 
         await saveSingleToCloud(newRecord);
     }
 
@@ -248,8 +249,6 @@
 
         for (let i = 1; i <= daysInMonth; i++) {
             const cell = document.createElement('div'); cell.className = 'calendar-cell';
-            
-            // 強化比對邏輯，確保數字比對不受字串影響
             const dayRecords = records.filter(r => Number(r.year) === year && Number(r.month) === month && Number(r.day) === i);
             
             if (dayRecords.length > 0) {
@@ -276,7 +275,8 @@
             }
             saveLocal(); 
             renderAll(); 
-            await saveSingleToCloud();
+            // 修改時也只發送被修改的那一筆
+            if(editedRecord) await saveSingleToCloud(editedRecord);
         }
     }
 
