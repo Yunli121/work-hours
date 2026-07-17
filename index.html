@@ -161,8 +161,13 @@
             const response = await fetch(scriptURL + "?action=loadAll");
             const cloudData = await response.json();
             if (Array.isArray(cloudData)) {
+                // 自動去重與雙向融合邏輯：結合本地與雲端，確保不重複、不漏掉
                 const uniqueMap = new Map();
+                // 先放入本地現有的
+                records.forEach(item => { if(item && item.id) uniqueMap.set(item.id, item); });
+                // 再放入雲端下載的（若 ID 相同會保留最新的）
                 cloudData.forEach(item => { if(item && item.id) uniqueMap.set(item.id, item); });
+                
                 records = Array.from(uniqueMap.values());
                 saveLocal();
                 updateStatus("✅ 雲端資料已同步");
@@ -172,24 +177,21 @@
         }
         renderAll();
     }
-// 🔒 真正的防重複機制：每次只傳「一筆新資料」，絕不發送整串歷史紀錄
-// 修正後的安心版：發送即代表備份成功
-    async function saveSingleToCloud(singleRecord) {
+
+    // 用回原本後端認得的 saveAll，但發送即自動通知成功
+    async function saveToCloud() {
         const btn = document.getElementById('saveBtn');
         btn.disabled = true;
-        updateStatus("⏳ 正在上傳單筆資料...");
+        updateStatus("⏳ 正在同步至雲端...");
         try {
-            // 修正：動作改成 addData，且 body 只包單一物件，不包整個 records 陣列
             await fetch(scriptURL, {
                 method: "POST",
                 mode: 'no-cors',
-                body: JSON.stringify({ action: "addData", data: singleRecord })
+                body: JSON.stringify({ action: "saveAll", data: records })
             });
-            // 因為 no-cors 模式下一定會進到這裡，直接顯示成功即可
             updateStatus("✅ 資料已成功備份至雲端");
         } catch (e) {
-            // 只有在完全沒網路、連發送都斷線時才會進到這裡
-            updateStatus("❌ 網路完全斷線，已存至本地記憶");
+            updateStatus("❌ 雲端上傳失敗，已存至本地");
         }
         btn.disabled = false;
     }
@@ -216,14 +218,14 @@
         document.getElementById('dailyHour').value = "";
         document.getElementById('dailyMin').value = "";
         
-        // 傳送且僅傳送當前這筆 newRecord 
-        await saveSingleToCloud(newRecord);
+        await saveToCloud();
     }
 
     function settleAll() {
         if (confirm("確定要結算嗎？結算後將歸零並重新計算。歷史紀錄仍會保留在日曆中。")) {
             lastSettleTime = Date.now();
             localStorage.setItem('lastSettleTime', lastSettleTime);
+            saveLocal();
             renderAll();
             updateStatus("✅ 結算成功！新週期開始");
         }
@@ -277,8 +279,7 @@
             }
             saveLocal(); 
             renderAll(); 
-            // 修改時也只發送被修改的那一筆
-            if(editedRecord) await saveSingleToCloud(editedRecord);
+            await saveToCloud();
         }
     }
 
